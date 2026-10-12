@@ -1,0 +1,80 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-rag-platform"
+version = "0.1.0"
+description = "Document-grounded agentic RAG platform (FastAPI + LlamaIndex + LangGraph + Groq)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "Agentic RAG Platform" }]
+
+dependencies = [
+    # --- Web / API ---
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.34",
+    "python-multipart>=0.0.12",
+    # --- Config / validation ---
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "email-validator>=2.2",
+    # --- Persistence ---
+    "sqlalchemy[asyncio]>=2.0.36",
+    "aiosqlite>=0.20",
+    "alembic>=1.14",
+    # --- Security ---
+    "PyJWT>=2.10",
+    "argon2-cffi>=23.1",
+    # --- HTTP / external providers ---
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    # --- RAG: ingestion + retrieval ---
+    "llama-index-core>=0.12",
+    "pypdf>=5.1",
+    "python-docx>=1.1",
+    "qdrant-client>=1.12",
+    "rank-bm25>=0.2.2",
+    # --- Embeddings + reranking (local models) ---
+    "sentence-transformers>=3.3",
+    # --- Agent orchestration + LLM ---
+    "langgraph>=0.2.60",
+    "langchain-core>=0.3",
+    "groq>=0.13",
+]
+
+[project.optional-dependencies]
+postgres = ["asyncpg>=0.30", "psycopg[binary]>=3.2"]
+eval = ["ragas>=0.2", "datasets>=3.1", "pandas>=2.2"]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "respx>=0.22",
+    "ruff>=0.8",
+    "mypy>=1.13",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "C4", "SIM", "ASYNC"]
+ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
+
+[tool.mypy]
+python_version = "3.11"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true

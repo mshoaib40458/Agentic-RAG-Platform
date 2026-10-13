@@ -11,9 +11,9 @@ LangGraph verification workflow.
 
 ```
 HTTP (FastAPI)
-  api/v1/          routers: auth, users, documents, query, feedback, evaluations, health
+  api/v1/          routers: auth, users, documents, query, conversations, feedback, evaluations, health
   api/deps.py      auth / RBAC / pagination dependencies
-  services/        business logic (auth, documents, query, feedback, evaluation)
+  services/        business logic (auth, documents, query, conversations, feedback, evaluation)
   repositories/    data access (SQLAlchemy 2.0 async)
   agent/           LangGraph state graph + nodes + runner
   retrieval/       dense + BM25 + RRF fusion + hybrid orchestration
@@ -70,6 +70,7 @@ All settings come from environment variables. Key choices:
 | `VECTOR_STORE` | `qdrant_local` | Embedded Qdrant; use `qdrant` for a server |
 | `EMBEDDING_PROVIDER` | `local` | `local` (Sentence-Transformers) or `huggingface` |
 | `RERANKER_ENABLED` | `false` | Enable the cross-encoder for a precision lift (downloads a model) |
+| `DISABLE_AUTH` | `false` | `true` skips login and runs every request as an administrator (local demos only) |
 | `GROQ_MODEL` | `openai/gpt-oss-20b` | Any currently supported Groq model |
 
 ---
@@ -102,6 +103,15 @@ applied; production deployments should rely on `alembic upgrade head`.
 A user can read documents they **own** or that live in the reserved `public`
 collection. Admins read everything. The first registered account becomes an
 administrator (bootstrap); later self-registrations are forced to `user`.
+
+---
+
+## Conversations
+
+Multi-turn chat is persisted. Create a conversation with `POST /conversations`,
+pass its `id` as `conversation_id` on `POST /query` to append turns, and read or
+delete threads via `GET` / `DELETE /conversations/{id}`. All conversation routes
+require `query:execute`.
 
 ---
 

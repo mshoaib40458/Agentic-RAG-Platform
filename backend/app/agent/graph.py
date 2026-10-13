@@ -1,6 +1,7 @@
 """Graph wiring for the agentic RAG workflow (SRS FR-025/FR-030).
 
-    START -> plan -+- respond -> END
+    START -> plan -+- no_retrieval -> respond -> END
+                   +- respond -> END
                    +- retrieve -+-> retrieve (loop over sub-queries)
                                 +-> grade -+- generate -> verify -+- generate (retry)
                                            |                     +-> respond -> END
@@ -25,12 +26,15 @@ def build_agent_graph(nodes: AgentNodes) -> Any:
     graph.add_node("grade", nodes.grade)
     graph.add_node("generate", nodes.generate)
     graph.add_node("verify", nodes.verify)
+    graph.add_node("no_retrieval", nodes.no_retrieval)
     graph.add_node("abstain", nodes.abstain)
     graph.add_node("respond", nodes.respond)
 
     graph.add_edge(START, "plan")
     graph.add_conditional_edges(
-        "plan", nodes.route_after_plan, {"retrieve": "retrieve", "respond": "respond"}
+        "plan",
+        nodes.route_after_plan,
+        {"retrieve": "retrieve", "no_retrieval": "no_retrieval", "respond": "respond"},
     )
     graph.add_conditional_edges(
         "retrieve", nodes.route_after_retrieve, {"retrieve": "retrieve", "grade": "grade"}
@@ -44,6 +48,7 @@ def build_agent_graph(nodes: AgentNodes) -> Any:
     graph.add_conditional_edges(
         "verify", nodes.route_after_verify, {"generate": "generate", "respond": "respond"}
     )
+    graph.add_edge("no_retrieval", "respond")
     graph.add_edge("abstain", "respond")
     graph.add_edge("respond", END)
 

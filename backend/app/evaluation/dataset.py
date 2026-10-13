@@ -15,10 +15,13 @@ Chunk-level labels take precedence over document-level labels when present.
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from app.core.exceptions import IngestionError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -39,6 +42,7 @@ def load_dataset(path: Path) -> list[EvalItem]:
             f"Evaluation dataset not found at {path}.", code="eval_dataset_missing"
         )
     items: list[EvalItem] = []
+    skipped = 0
     for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         raw = raw.strip()
         if not raw:
@@ -49,14 +53,23 @@ def load_dataset(path: Path) -> list[EvalItem]:
             raise IngestionError(
                 f"Invalid JSON on line {line_number} of the dataset.", code="eval_dataset_invalid"
             ) from exc
+        question = str(record.get("question", "")).strip()
+        if not question:
+            skipped += 1
+            continue
         items.append(
             EvalItem(
-                question=record["question"],
+                question=question,
                 relevant_document_ids=list(record.get("relevant_document_ids") or []),
                 relevant_chunk_ids=list(record.get("relevant_chunk_ids") or []),
-                expected_answer=record.get("expected_answer"),
+                expected_answer=(record.get("expected_answer") or None),
             )
         )
+    if skipped:
+        logger.warning("eval_dataset_skipped_blank_questions", extra={"count": skipped})
     if not items:
-        raise IngestionError("Evaluation dataset is empty.", code="eval_dataset_empty")
+        raise IngestionError(
+            "Evaluation dataset has no usable questions.", code="eval_dataset_invalid"
+        )
     return items
+

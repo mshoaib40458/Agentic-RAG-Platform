@@ -313,6 +313,37 @@ class AgentNodes:
             "iterations": state["iterations"] + 1,
         }
 
+    async def no_retrieval(self, state: AgentState) -> dict[str, Any]:
+        """Answer meta/greeting messages directly, without touching the corpus."""
+        started = time.perf_counter()
+        answer = prompts.NO_RETRIEVAL_FALLBACK
+        model = ""
+        usage = {"prompt_tokens": 0, "completion_tokens": 0}
+        try:
+            result = await self.chat_model.chat(prompts.no_retrieval_messages(state["question"]))
+        except ProviderError:
+            logger.warning("agent_no_retrieval_call_failed")
+        else:
+            if result.content.strip():
+                answer = result.content.strip()
+                model = result.model or self.chat_model.model_name
+            usage = {
+                "prompt_tokens": result.prompt_tokens or 0,
+                "completion_tokens": result.completion_tokens or 0,
+            }
+
+        return {
+            "final_answer": answer,
+            "draft_answer": answer,
+            "citations": [],
+            "used_evidence": [],
+            "model": model,
+            "verification_status": VerificationStatus.SKIPPED.value,
+            "stage_timings": {"no_retrieval": time.perf_counter() - started},
+            "usage": self._merge_usage(state, usage),
+            "iterations": state["iterations"] + 1,
+        }
+
     async def abstain(self, state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         return {
@@ -339,7 +370,10 @@ class AgentNodes:
     # Conditional routing
     # ------------------------------------------------------------------ #
     def route_after_plan(self, state: AgentState) -> str:
-        if state.get("intent") in {QueryIntent.NO_RETRIEVAL.value, QueryIntent.CLARIFY.value}:
+        intent = state.get("intent")
+        if intent == QueryIntent.NO_RETRIEVAL.value:
+            return "no_retrieval"
+        if intent == QueryIntent.CLARIFY.value:
             return "respond"
         return "retrieve"
 

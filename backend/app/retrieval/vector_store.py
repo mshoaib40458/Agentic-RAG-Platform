@@ -101,6 +101,7 @@ class QdrantVectorStore:
     def _ensure_collection(self) -> None:
         models = self._models
         if self._client.collection_exists(self._collection):
+            self._verify_dimension()
             return
         self._client.create_collection(
             collection_name=self._collection,
@@ -109,6 +110,29 @@ class QdrantVectorStore:
             ),
         )
         logger.info("created_vector_collection", extra={"collection": self._collection})
+
+    def _verify_dimension(self) -> None:
+        """Fail fast when the collection was built for a different embedding model.
+
+        Mixing vectors of different sizes silently corrupts retrieval, so we
+        surface a clear operator error instead (SRS NFR-006).
+        """
+        try:
+            info = self._client.get_collection(self._collection)
+            params = info.config.params.vectors
+            # Named-vector configs expose a mapping; only guard single-vector ones.
+            size = getattr(params, "size", None) if not isinstance(params, dict) else None
+            if size is not None and int(size) != int(self._dimension):
+                raise RetrievalError(
+                    f"Collection '{self._collection}' has dimension {size} but the "
+                    f"configured embedding model produces {self._dimension}. Re-ingest "
+                    "into a fresh collection or update EMBEDDING_DIM.",
+                    code="embedding_dimension_mismatch",
+                )
+        except RetrievalError:
+            raise
+        except Exception:  # noqa: BLE001 - introspection is best-effort
+            logger.warning("vector_dimension_check_skipped", exc_info=True)
 
     async def upsert(self, records: list[VectorRecord]) -> None:
         if not records:

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 from functools import lru_cache
 
 import httpx
@@ -32,6 +33,7 @@ class LocalEmbeddingModel:
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
         self._model = None  # loaded lazily
+        self._load_lock = threading.Lock()
 
     @property
     def dimension(self) -> int:
@@ -39,17 +41,27 @@ class LocalEmbeddingModel:
 
     def _load(self):
         if self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-            except ImportError as exc:  # pragma: no cover - optional dependency path
-                raise ProviderError(
-                    "sentence-transformers is not installed; install the local-ml extra "
-                    "or set EMBEDDING_PROVIDER=huggingface.",
-                    code="embeddings_unavailable",
-                ) from exc
-            logger.info("loading_embedding_model", extra={"model": self._settings.embedding_model})
-            self._model = SentenceTransformer(self._settings.embedding_model, device="cpu")
+            with self._load_lock:
+                if self._model is None:
+                    try:
+                        from sentence_transformers import SentenceTransformer
+                    except ImportError as exc:  # pragma: no cover - optional dependency path
+                        raise ProviderError(
+                            "sentence-transformers is not installed; install the local-ml extra "
+                            "or set EMBEDDING_PROVIDER=huggingface.",
+                            code="embeddings_unavailable",
+                        ) from exc
+                    logger.info(
+                        "loading_embedding_model", extra={"model": self._settings.embedding_model}
+                    )
+                    self._model = SentenceTransformer(
+                        self._settings.embedding_model, device="cpu"
+                    )
         return self._model
+
+    async def warmup(self) -> None:
+        """Eagerly load the model so the first real query is not penalised."""
+        await asyncio.to_thread(self._load)
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         if not texts:

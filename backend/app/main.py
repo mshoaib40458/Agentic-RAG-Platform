@@ -7,6 +7,7 @@ Run locally with::
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections.abc import AsyncIterator
@@ -24,6 +25,31 @@ from app.core.logging import configure_logging, request_id_ctx
 logger = logging.getLogger(__name__)
 
 
+async def _warm_models() -> None:
+    """Load heavy inference models and the vector store ahead of first use."""
+    try:
+        from app.core.config import get_settings
+        from app.llm.embeddings import get_embedding_model
+        from app.retrieval.vector_store import get_vector_store
+
+        settings = get_settings()
+        model = get_embedding_model()
+        warmup = getattr(model, "warmup", None)
+        if warmup is not None:
+            await warmup()
+        if settings.reranker_enabled:
+            from app.llm.reranker import get_reranker
+
+            reranker = get_reranker()
+            reranker_warmup = getattr(reranker, "warmup", None)
+            if reranker_warmup is not None:
+                await reranker_warmup()
+        get_vector_store()
+        logger.info("inference_models_warmed")
+    except Exception:  # pragma: no cover - warmup must never crash startup
+        logger.warning("inference_warmup_failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
@@ -36,10 +62,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         await init_db()
 
+    warmup_task = asyncio.create_task(_warm_models(), name="inference_warmup")
     logger.info("application_started", extra={"environment": settings.environment})
     try:
         yield
     finally:
+        warmup_task.cancel()
         from app.db.session import dispose_engine
 
         await dispose_engine()

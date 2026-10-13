@@ -115,3 +115,7 @@ class QueryService:
         return await self.queries.list_for_user(
             user_id=user.id, limit=limit, offset=offset, include_all=include_all
         )
+
+    async def analytics(self, *, user: User) -> dict:
+        include_all = user.role in {UserRole.ADMIN.value, UserRole.EVALUATOR.value}
+        return await self.queries.analytics(user_id=user.id, include_all=include_all)

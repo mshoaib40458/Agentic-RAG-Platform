@@ -125,3 +125,9 @@ def no_retrieval_messages(question: str) -> list[Message]:
         {"role": "system", "content": system},
         {"role": "user", "content": question},
     ]
+
+
+NO_RETRIEVAL_FALLBACK = (
+    "Hi! I am your document assistant. Ask a question about your uploaded "
+    "documents and I will answer from their contents."
+)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -54,13 +55,28 @@ class AnswerRead(ORMModel):
 class QueryRead(ORMModel):
     id: str
     question: str
-    filters: dict = Field(default_factory=dict)
+    filters: dict[str, Any] = Field(default_factory=dict)
     status: QueryStatus
     intent: str | None = None
     latency_ms: int | None = None
-    stage_timings: dict = Field(default_factory=dict)
+    stage_timings: dict[str, Any] = Field(default_factory=dict)
     error_message: str | None = None
+    answer: AnswerRead | None = None
     created_at: datetime
+
+
+class QueryAnalytics(BaseModel):
+    """Aggregated query latency/quality signals (SRS 8.3)."""
+
+    total_queries: int
+    latency_samples: int
+    avg_latency_ms: int | None = None
+    p50_latency_ms: int | None = None
+    p95_latency_ms: int | None = None
+    abstention_count: int = 0
+    abstention_rate: float = 0.0
+    verification_breakdown: dict[str, int] = Field(default_factory=dict)
+    intent_breakdown: dict[str, int] = Field(default_factory=dict)
     answer: AnswerRead | None = None
 
 

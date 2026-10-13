@@ -16,6 +16,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="agentic_rag_test_"))
 _DB_PATH = _TMP / "test.db"
 
 os.environ["ENVIRONMENT"] = "development"
+os.environ["SETTINGS_IGNORE_DOTENV"] = "1"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_DB_PATH.as_posix()}"
 os.environ["STORAGE_DIR"] = (_TMP / "storage").as_posix()
 os.environ["QDRANT_PATH"] = (_TMP / "qdrant").as_posix()

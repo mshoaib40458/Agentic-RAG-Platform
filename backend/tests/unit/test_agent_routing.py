@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from app.agent.nodes import AgentNodes
 from app.core.constants import QueryIntent, VerificationStatus
+from app.llm.base import ChatResult, Message
 
 
 def _nodes() -> AgentNodes:
@@ -11,9 +14,21 @@ def _nodes() -> AgentNodes:
     return AgentNodes(retriever=object(), chat_model=object())
 
 
+class _StubChat:
+    model_name = "stub"
+
+    def __init__(self, content: str) -> None:
+        self._content = content
+
+    async def chat(self, messages: list[Message], **_: Any) -> ChatResult:
+        return ChatResult(
+            content=self._content, model="stub", prompt_tokens=3, completion_tokens=2
+        )
+
+
 def test_plan_routes_meta_queries_to_respond():
     nodes = _nodes()
-    assert nodes.route_after_plan({"intent": QueryIntent.NO_RETRIEVAL.value}) == "respond"
+    assert nodes.route_after_plan({"intent": QueryIntent.NO_RETRIEVAL.value}) == "no_retrieval"
     assert nodes.route_after_plan({"intent": QueryIntent.CLARIFY.value}) == "respond"
     assert nodes.route_after_plan({"intent": QueryIntent.DIRECT.value}) == "retrieve"
 
@@ -70,3 +85,16 @@ def test_verify_regenerates_once_then_responds():
         "generation_attempts": 1,
     }
     assert nodes.route_after_verify(supported) == "respond"
+
+
+async def test_no_retrieval_node_answers_greeting_without_evidence():
+    nodes = AgentNodes(
+        retriever=object(), chat_model=_StubChat("Hi! Ask me anything about your documents.")
+    )
+    state: dict[str, Any] = {"question": "hello", "iterations": 0, "usage": {}}
+    update = await nodes.no_retrieval(state)  # type: ignore[arg-type]
+    assert update["final_answer"] == "Hi! Ask me anything about your documents."
+    assert update["citations"] == []
+    assert update["verification_status"] == VerificationStatus.SKIPPED.value
+    assert update["model"] == "stub"
+    assert update["usage"]["prompt_tokens"] == 3

@@ -13,10 +13,13 @@ are committed so a failed upsert cannot report a partial success (SRS NFR-006).
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.constants import DocumentStatus
@@ -28,6 +31,31 @@ from app.llm.embeddings import get_embedding_model
 from app.retrieval.vector_store import VectorRecord, get_vector_store
 
 logger = logging.getLogger(__name__)
+
+# Stable namespace for deriving deterministic chunk ids. Changing this value
+# changes every chunk id, so it must remain fixed across releases.
+_CHUNK_ID_NAMESPACE = uuid.UUID("d5f3e6b0-3c2a-4b6e-9f1a-6c2d5e7a9b10")
+
+
+def _chunk_identity(document_id: str, index: int) -> str:
+    """Deterministic 32-char chunk id for a ``(document, position)`` pair.
+
+    Re-ingesting the same document reproduces the same ids, which makes writes
+    idempotent and prevents duplicate vectors on retries (SRS NFR-006).
+    """
+    return uuid.uuid5(_CHUNK_ID_NAMESPACE, f"{document_id}:{index}").hex
+
+
+def _chunk_metadata(document: Document, chunk, *, position: str) -> dict[str, object]:
+    text = chunk.text
+    return {
+        "filename": document.filename,
+        "content_hash": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
+        "char_count": len(text),
+        "word_count": len(text.split()),
+        "position": position,
+        "indexed_at": datetime.now(UTC).isoformat(),
+    }
 
 
 class DocumentIngestor:
@@ -71,6 +99,8 @@ class DocumentIngestor:
         if not await asyncio.to_thread(path.exists):
             raise IngestionError("Stored file is missing.", code="file_missing")
 
+        await self._clear_existing(document)
+
         extracted = extract_document(path, document.file_type)
         document.page_count = extracted.page_count
 
@@ -82,8 +112,22 @@ class DocumentIngestor:
 
         records: list[VectorRecord] = []
         chunk_rows: list[DocumentChunk] = []
+        indexed_at = datetime.now(UTC).isoformat()
+        total = len(chunks)
         for chunk, vector in zip(chunks, vectors, strict=True):
-            chunk_id = uuid.uuid4().hex
+            chunk_id = _chunk_identity(document.id, chunk.index)
+            # Qdrant point ids must be valid UUIDs or integers. The database
+            # uses a compact 32-char hex id, so map it to canonical UUID form
+            # for the vector store; the payload keeps the hex chunk_id so
+            # dense/BM25 results fuse on a single identifier.
+            point_id = str(uuid.UUID(chunk_id))
+            content_hash = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()[:16]
+            if chunk.index == 0:
+                position = "start"
+            elif chunk.index == total - 1:
+                position = "end"
+            else:
+                position = "middle"
             payload = {
                 "document_id": document.id,
                 "chunk_id": chunk_id,
@@ -94,8 +138,10 @@ class DocumentIngestor:
                 "collection": document.collection,
                 "owner_id": document.owner_id,
                 "text": chunk.text,
+                "content_hash": content_hash,
+                "indexed_at": indexed_at,
             }
-            records.append(VectorRecord(id=chunk_id, vector=vector, payload=payload))
+            records.append(VectorRecord(id=point_id, vector=vector, payload=payload))
             chunk_rows.append(
                 DocumentChunk(
                     id=chunk_id,
@@ -104,8 +150,8 @@ class DocumentIngestor:
                     text=chunk.text,
                     page=chunk.page,
                     token_count=chunk.token_count,
-                    chunk_metadata={"filename": document.filename, "page": chunk.page},
-                    vector_id=chunk_id,
+                    chunk_metadata=_chunk_metadata(document, chunk, position=position),
+                    vector_id=point_id,
                 )
             )
 
@@ -113,6 +159,20 @@ class DocumentIngestor:
         self.session.add_all(chunk_rows)
         await self.session.flush()
         return len(chunk_rows)
+
+    async def _clear_existing(self, document: Document) -> None:
+        """Drop prior chunks/vectors so re-ingestion is idempotent.
+
+        Deterministic chunk ids already make most upserts overwrite in place,
+        but clearing first also removes stale chunks when a document shrinks.
+        """
+        if not document.id:
+            return
+        await self.vector_store.delete_by_document(document.id)
+        await self.session.execute(
+            delete(DocumentChunk).where(DocumentChunk.document_id == document.id)
+        )
+        await self.session.flush()
 
 
 async def delete_document_vectors(document_id: str) -> None:

@@ -11,12 +11,17 @@ This keeps the ``.env`` file readable while avoiding brittle JSON parsing.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SettingsConfigDict,
+)
 
 DEFAULT_SECRET = "change-me-in-production-use-a-long-random-string"
 
@@ -58,7 +63,7 @@ class Settings(BaseSettings):
 
     # --- LLM: Groq ---
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "openai/gpt-oss-20b"
     groq_temperature: float = 0.0
     groq_max_tokens: int = 1024
     groq_timeout_seconds: int = 30
@@ -72,7 +77,10 @@ class Settings(BaseSettings):
     hf_api_token: str = ""
 
     # --- Reranking ---
-    reranker_enabled: bool = True
+    # Disabled by default to keep first-run latency and disk usage low; enable
+    # for a measurable precision lift on ambiguous queries. The cross-encoder
+    # is warmed at startup when enabled (see app.main).
+    reranker_enabled: bool = False
     reranker_model: str = "BAAI/bge-reranker-base"
     reranker_top_n: int = 5
 
@@ -107,6 +115,27 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------ #
     # Validators
     # ------------------------------------------------------------------ #
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Give the ``.env`` file priority over OS environment variables.
+
+        Prevents a stale shell-level variable (e.g. an old ``GROQ_API_KEY``)
+        from silently overriding the values the project is configured with.
+        Tests opt out with ``SETTINGS_IGNORE_DOTENV=1`` so their environment
+        overrides win.
+        """
+        ignore_dotenv = os.environ.get("SETTINGS_IGNORE_DOTENV", "").strip().lower()
+        if ignore_dotenv in {"1", "true", "yes", "on"}:
+            return (init_settings, env_settings, file_secret_settings)
+        return (init_settings, dotenv_settings, env_settings, file_secret_settings)
+
     @field_validator("log_level")
     @classmethod
     def _upper_log_level(cls, value: str) -> str:

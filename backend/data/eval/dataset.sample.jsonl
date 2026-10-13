@@ -1,0 +1,2 @@
+{"question": "What is the main topic of the sample document?", "relevant_document_ids": ["<replace-with-a-document-id>"], "relevant_chunk_ids": [], "expected_answer": "A short reference answer used for answer-level scoring."}
+{"question": "Which section covers the conclusion?", "relevant_document_ids": ["<document-id>"], "relevant_chunk_ids": ["<chunk-id>"]}

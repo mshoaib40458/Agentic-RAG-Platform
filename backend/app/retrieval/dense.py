@@ -26,7 +26,9 @@ class DenseRetriever:
         )
         return [
             RetrievedChunk(
-                id=hit.id,
+                # The vector-store point id is a canonical UUID; the payload
+                # chunk_id is the database id that BM25 and fusion key on.
+                id=str(hit.payload.get("chunk_id") or hit.id),
                 text=hit.text,
                 score=hit.score,
                 document_id=str(hit.payload.get("document_id", "")),

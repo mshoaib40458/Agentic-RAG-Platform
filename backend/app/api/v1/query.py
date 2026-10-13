@@ -10,7 +10,7 @@ from app.api.deps import PaginationDep, SessionDep, require_permission
 from app.core.constants import Permission
 from app.db.models.user import User
 from app.schemas.common import Page
-from app.schemas.query import QueryRead, QueryRequest, QueryStatusRead
+from app.schemas.query import QueryAnalytics, QueryRead, QueryRequest, QueryStatusRead
 from app.services.query_service import QueryService
 
 router = APIRouter(prefix="/query", tags=["query"])
@@ -37,6 +37,12 @@ async def list_queries(
         limit=pagination.limit,
         offset=pagination.offset,
     )
+
+
+@router.get("/analytics", response_model=QueryAnalytics)
+async def query_analytics(session: SessionDep, user: QueryDep) -> QueryAnalytics:
+    data = await QueryService(session).analytics(user=user)
+    return QueryAnalytics.model_validate(data)
 
 
 @router.get("/{query_id}", response_model=QueryRead)

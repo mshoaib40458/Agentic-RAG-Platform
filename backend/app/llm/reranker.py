@@ -51,6 +51,10 @@ class CrossEncoderReranker:
             self._model = CrossEncoder(self._settings.reranker_model, device="cpu")
         return self._model
 
+    async def warmup(self) -> None:
+        """Load the cross-encoder off the event loop (called at startup)."""
+        await asyncio.to_thread(self._load)
+
     async def rerank(
         self, query: str, candidates: list[RerankCandidate], *, top_n: int
     ) -> list[RerankCandidate]:

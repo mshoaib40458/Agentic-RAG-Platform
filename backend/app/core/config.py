@@ -49,6 +49,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    # When true, every request runs as a built-in administrator without a token
+    # and the UI skips the login screen. Intended for local demos only.
+    disable_auth: bool = False
 
     # --- Database ---
     database_url: str = "sqlite+aiosqlite:///./data/app.db"
@@ -67,7 +70,7 @@ class Settings(BaseSettings):
     groq_temperature: float = 0.0
     groq_max_tokens: int = 1024
     groq_timeout_seconds: int = 30
-    groq_max_retries: int = 3
+    groq_max_retries: int = 4
 
     # --- Embeddings ---
     embedding_provider: Literal["local", "huggingface"] = "local"
@@ -107,6 +110,7 @@ class Settings(BaseSettings):
     agent_timeout_seconds: int = 60
     agent_enable_query_decomposition: bool = True
     agent_enable_verification: bool = True
+    agent_history_turns: int = 8
 
     # --- Evaluation ---
     eval_enabled: bool = False

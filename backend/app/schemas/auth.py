@@ -13,6 +13,10 @@ from app.schemas.common import ORMModel
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
+class AuthConfig(BaseModel):
+    auth_disabled: bool = False
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     username: str = Field(min_length=3, max_length=64)

@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.agent import prompts
 from app.agent.nodes import AgentNodes
 from app.core.constants import QueryIntent, VerificationStatus
+from app.core.exceptions import ProviderError, RateLimitError
 from app.llm.base import ChatResult, Message
 
 
@@ -98,3 +100,51 @@ async def test_no_retrieval_node_answers_greeting_without_evidence():
     assert update["verification_status"] == VerificationStatus.SKIPPED.value
     assert update["model"] == "stub"
     assert update["usage"]["prompt_tokens"] == 3
+
+
+class _RateLimitedChat:
+    """Chat model that always reports the provider is rate limiting."""
+
+    model_name = "stub"
+
+    async def chat(self, *_args: Any, **_kwargs: Any) -> Any:
+        raise RateLimitError(
+            "Groq is temporarily unavailable or rate limiting requests.",
+            code="groq_unavailable",
+        )
+
+
+def test_rate_limit_error_is_a_provider_error():
+    # Guards the fix: a rate limit must flow through every ProviderError fallback.
+    assert issubclass(RateLimitError, ProviderError)
+
+
+async def test_plan_degrades_gracefully_on_rate_limit():
+    nodes = AgentNodes(retriever=object(), chat_model=_RateLimitedChat())
+    state: dict[str, Any] = {"question": "why?", "iterations": 0, "usage": {}}
+    update = await nodes.plan(state)  # type: ignore[arg-type]
+    assert update["intent"] == QueryIntent.DIRECT.value
+    assert update["sub_queries"] == ["why?"]
+
+
+async def test_generate_degrades_gracefully_on_rate_limit():
+    nodes = AgentNodes(retriever=object(), chat_model=_RateLimitedChat())
+    state: dict[str, Any] = {
+        "question": "why?",
+        "evidence": [],
+        "iterations": 0,
+        "usage": {},
+        "generation_attempts": 0,
+    }
+    update = await nodes.generate(state)  # type: ignore[arg-type]
+    assert update["error"] == "generation_unavailable"
+    assert update["abstained"] is True
+    assert update["verification_status"] == VerificationStatus.SKIPPED.value
+
+
+async def test_no_retrieval_degrades_gracefully_on_rate_limit():
+    nodes = AgentNodes(retriever=object(), chat_model=_RateLimitedChat())
+    state: dict[str, Any] = {"question": "hello", "iterations": 0, "usage": {}}
+    update = await nodes.no_retrieval(state)  # type: ignore[arg-type]
+    assert update["final_answer"] == prompts.NO_RETRIEVAL_FALLBACK
+    assert update["citations"] == []

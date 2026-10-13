@@ -11,6 +11,7 @@ from app.core.constants import UserRole
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.db.models.conversation import Conversation
     from app.db.models.document import Document
     from app.db.models.feedback import Feedback
     from app.db.models.query import Query
@@ -29,6 +30,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="owner", cascade="all, delete-orphan"
     )
     queries: Mapped[list[Query]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    conversations: Mapped[list[Conversation]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
     feedback: Mapped[list[Feedback]] = relationship(back_populates="user")

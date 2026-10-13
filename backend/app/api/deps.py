@@ -9,9 +9,10 @@ from fastapi import Depends, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.constants import ROLE_PERMISSIONS, Permission, UserRole
 from app.core.exceptions import AuthenticationError, PermissionDeniedError
-from app.core.security import decode_token
+from app.core.security import decode_token, hash_password
 from app.db.models.user import User
 from app.db.session import get_session
 from app.repositories.user_repo import UserRepository
@@ -20,11 +21,41 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
+DEFAULT_ADMIN_USERNAME = "admin"
+DEFAULT_ADMIN_EMAIL = "admin@example.com"
+DEFAULT_ADMIN_PASSWORD = "admin1234"
+
+
+async def _resolve_open_user(session: AsyncSession) -> User:
+    """Return the account used when ``disable_auth`` is enabled.
+
+    Prefers an existing administrator (so previously uploaded documents and
+    conversations remain visible), then any active user, and finally creates a
+    bootstrap admin on an empty database.
+    """
+    users = UserRepository(session)
+    user = await users.get_first_admin() or await users.get_first_active()
+    if user is not None:
+        return user
+    user = User(
+        username=DEFAULT_ADMIN_USERNAME,
+        email=DEFAULT_ADMIN_EMAIL,
+        hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+        role=UserRole.ADMIN.value,
+        is_active=True,
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
 
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
     session: SessionDep,
 ) -> User:
+    if get_settings().disable_auth:
+        return await _resolve_open_user(session)
     if credentials is None or not credentials.credentials:
         raise AuthenticationError("A bearer token is required.")
     claims = decode_token(credentials.credentials, expected_type="access")

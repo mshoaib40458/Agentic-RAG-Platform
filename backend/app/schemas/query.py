@@ -24,6 +24,7 @@ class QueryRequest(BaseModel):
     filters: QueryFilters | None = None
     top_k: int | None = Field(default=None, ge=1, le=50)
     stream: bool = False
+    conversation_id: str | None = Field(default=None, max_length=32)
 
 
 class Citation(BaseModel):
@@ -63,6 +64,7 @@ class QueryRead(ORMModel):
     error_message: str | None = None
     answer: AnswerRead | None = None
     created_at: datetime
+    conversation_id: str | None = None
 
 
 class QueryAnalytics(BaseModel):

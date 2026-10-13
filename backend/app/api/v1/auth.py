@@ -5,12 +5,26 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from app.api.deps import CurrentUser, SessionDep
+from app.core.config import get_settings
 from app.core.constants import UserRole
 from app.repositories.user_repo import UserRepository
-from app.schemas.auth import LoginRequest, RefreshRequest, Token, UserCreate, UserRead
+from app.schemas.auth import (
+    AuthConfig,
+    LoginRequest,
+    RefreshRequest,
+    Token,
+    UserCreate,
+    UserRead,
+)
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.get("/config", response_model=AuthConfig)
+async def config() -> AuthConfig:
+    """Expose public auth settings so the UI can adapt (e.g. skip login)."""
+    return AuthConfig(auth_disabled=get_settings().disable_auth)
 
 
 @router.post("/register", response_model=UserRead, status_code=status.HTTP_201_CREATED)

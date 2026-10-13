@@ -18,6 +18,7 @@ from app.repositories.document_repo import DocumentRepository
 from app.repositories.query_repo import QueryRepository
 from app.retrieval.hybrid import HybridRetriever
 from app.schemas.query import QueryRequest
+from app.services.conversation_service import ConversationService
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +29,18 @@ class QueryService:
         self.settings = get_settings()
         self.queries = QueryRepository(session)
         self.documents = DocumentRepository(session)
+        self.conversations = ConversationService(session)
 
-    async def run(self, *, user: User, request: QueryRequest) -> Query:
+    async def run(self, *, user: User, request: QueryRequest) -> tuple[Query, str]:
         filters = request.filters.model_dump(exclude_none=True) if request.filters else {}
+
+        conversation = await self.conversations.resolve(
+            user=user, conversation_id=request.conversation_id, question=request.question
+        )
+        history = await self.conversations.history_for(
+            conversation, limit=self.settings.agent_history_turns
+        )
+
         query = Query(
             user_id=user.id,
             question=request.question,
@@ -54,6 +64,7 @@ class QueryService:
                 user_id=user.id,
                 role=user.role,
                 accessible_document_ids=accessible,
+                history=history,
                 filters=filters,
                 top_k=request.top_k,
             )
@@ -93,8 +104,10 @@ class QueryService:
         query.error_message = None
         await self.session.flush()
 
+        await self.conversations.attach_turn(conversation, query)
+
         loaded = await self.queries.get_with_answer(query.id)
-        return loaded or query
+        return (loaded or query), conversation.id
 
     # ------------------------------------------------------------------ #
     # Reads

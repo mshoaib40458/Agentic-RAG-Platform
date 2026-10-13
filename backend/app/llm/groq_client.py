@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 from functools import lru_cache
 
 from app.core.config import Settings, get_settings
@@ -26,6 +27,9 @@ logger = logging.getLogger(__name__)
 
 class GroqChatModel:
     """Concrete :class:`~app.llm.base.ChatModel` backed by Groq."""
+
+    # Upper bound for a single backoff sleep so a run never stalls indefinitely.
+    _MAX_RETRY_DELAY = 10.0
 
     def __init__(self, settings: Settings | None = None) -> None:
         self._settings = settings or get_settings()
@@ -49,6 +53,20 @@ class GroqChatModel:
     def model_name(self) -> str:
         return self._settings.groq_model
 
+    @staticmethod
+    def _backoff_delay(exc: Exception, base: float) -> float:
+        """Sleep for the provider's ``Retry-After`` when given, else exponential backoff."""
+        response = getattr(exc, "response", None)
+        headers = getattr(response, "headers", None)
+        if headers is not None:
+            retry_after = headers.get("retry-after")
+            if retry_after is not None:
+                try:
+                    return min(float(retry_after), GroqChatModel._MAX_RETRY_DELAY)
+                except (TypeError, ValueError):
+                    pass
+        return min(base, GroqChatModel._MAX_RETRY_DELAY) + random.uniform(0, 0.25)
+
     async def chat(
         self,
         messages: list[Message],
@@ -70,7 +88,7 @@ class GroqChatModel:
             kwargs["response_format"] = {"type": "json_object"}
 
         retryable = (groq.RateLimitError, groq.APITimeoutError, groq.APIConnectionError)
-        delay = 0.5
+        delay = 1.0
         attempt = 0
         while True:
             attempt += 1
@@ -92,14 +110,14 @@ class GroqChatModel:
                         "Groq is temporarily unavailable or rate limiting requests.",
                         code="groq_unavailable",
                     ) from exc
-                await asyncio.sleep(delay)
-                delay = min(delay * 2, 8.0)
+                await asyncio.sleep(self._backoff_delay(exc, delay))
+                delay = min(delay * 2, self._MAX_RETRY_DELAY)
             except groq.APIStatusError as exc:
                 status = getattr(exc, "status_code", 0)
                 if status >= 500 and attempt < settings.groq_max_retries:
                     logger.warning("groq_server_error", extra={"status": status})
-                    await asyncio.sleep(delay)
-                    delay = min(delay * 2, 8.0)
+                    await asyncio.sleep(self._backoff_delay(exc, delay))
+                    delay = min(delay * 2, self._MAX_RETRY_DELAY)
                     continue
                 raise ProviderError(
                     "Groq returned an error response.", code="groq_error"

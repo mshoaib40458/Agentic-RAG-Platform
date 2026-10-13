@@ -102,18 +102,25 @@ class UnsupportedMediaTypeError(AppError):
     message = "The uploaded file type is not supported."
 
 
-class RateLimitError(AppError):
-    status_code = status.HTTP_429_TOO_MANY_REQUESTS
-    code = "rate_limited"
-    message = "The upstream provider is rate limiting requests. Please retry shortly."
-
-
 class ProviderError(AppError):
     """Upstream dependency (Groq, embeddings, vector store) failed."""
 
     status_code = status.HTTP_502_BAD_GATEWAY
     code = "provider_error"
     message = "An upstream service failed to respond."
+
+
+class RateLimitError(ProviderError):
+    """Upstream provider is rate limiting requests.
+
+    A subclass of :class:`ProviderError` so every provider-failure fallback
+    (notably the agent nodes) degrades gracefully instead of hard-failing the
+    request. The 429 status is preserved for paths that surface it directly.
+    """
+
+    status_code = status.HTTP_429_TOO_MANY_REQUESTS
+    code = "rate_limited"
+    message = "The upstream provider is rate limiting requests. Please retry shortly."
 
 
 class IngestionError(AppError):

@@ -17,6 +17,18 @@ def _percentile(values: list[int], percentile: float) -> int | None:
     return ordered[index]
 
 
+def prune_document_references(
+    items: list[dict], document_id: str
+) -> list[dict]:
+    """Return ``items`` without any entry belonging to ``document_id``.
+
+    ``used_evidence`` holds full passage text and ``citations`` holds snippets;
+    both are pruned when a document is deleted so its content is not retained
+    in answer history.
+    """
+    return [item for item in items if item.get("document_id") != document_id]
+
+
 class QueryRepository(BaseRepository[Query]):
     model = Query
 
@@ -86,3 +98,23 @@ class QueryRepository(BaseRepository[Query]):
         self.session.add(answer)
         await self.session.flush()
         return answer
+
+    async def scrub_document_references(self, document_id: str) -> int:
+        """Purge ``document_id`` text from every stored answer.
+
+        Returns the number of answers whose stored evidence/citations changed.
+        """
+        rows = (await self.session.execute(select(Answer))).scalars().all()
+        updated = 0
+        for answer in rows:
+            used = answer.used_evidence or []
+            citations = answer.citations or []
+            pruned_used = prune_document_references(used, document_id)
+            pruned_citations = prune_document_references(citations, document_id)
+            if len(pruned_used) != len(used) or len(pruned_citations) != len(citations):
+                answer.used_evidence = pruned_used
+                answer.citations = pruned_citations
+                updated += 1
+        if updated:
+            await self.session.flush()
+        return updated

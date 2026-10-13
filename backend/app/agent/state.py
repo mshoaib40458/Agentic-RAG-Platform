@@ -19,6 +19,7 @@ class AgentState(TypedDict, total=False):
 
     # --- Inputs ---
     question: str
+    history: list[dict[str, str]]      # prior {question, answer} turns
     filters: dict[str, Any]              # document_ids / category / collection
     user_id: str
     role: str
@@ -30,6 +31,7 @@ class AgentState(TypedDict, total=False):
     intent: str
     sub_queries: list[str]
     current_query_index: int
+    standalone_query: str                 # context-resolved retrieval query
 
     # --- Retrieval / evidence ---
     evidence: Annotated[list[dict[str, Any]], operator.add]
@@ -61,12 +63,14 @@ def initial_state(
     user_id: str,
     role: str,
     accessible_document_ids: list[str],
+    history: list[dict[str, str]] | None = None,
     filters: dict[str, Any] | None = None,
     retrieval_mode: str = "hybrid_rerank",
     top_k: int = 5,
 ) -> AgentState:
     return AgentState(
         question=question,
+        history=history or [],
         filters=filters or {},
         user_id=user_id,
         role=role,
@@ -76,6 +80,7 @@ def initial_state(
         intent="",
         sub_queries=[],
         current_query_index=0,
+        standalone_query="",
         evidence=[],
         retrievals=0,
         evidence_sufficient=False,

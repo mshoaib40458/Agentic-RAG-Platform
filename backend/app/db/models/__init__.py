@@ -1,5 +1,6 @@
 """ORM models. Importing this package registers every table on ``Base.metadata``."""
 
+from app.db.models.conversation import Conversation, ConversationTurn
 from app.db.models.document import Document, DocumentChunk
 from app.db.models.evaluation import EvaluationRun
 from app.db.models.feedback import Feedback
@@ -8,6 +9,8 @@ from app.db.models.user import User
 
 __all__ = [
     "Answer",
+    "Conversation",
+    "ConversationTurn",
     "Document",
     "DocumentChunk",
     "EvaluationRun",

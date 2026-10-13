@@ -30,6 +30,8 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
 _TABLES = [
+    "conversation_turns",
+    "conversations",
     "answers",
     "feedback",
     "document_chunks",

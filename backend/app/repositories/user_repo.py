@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy import or_, select
 
+from app.core.constants import UserRole
 from app.db.models.user import User
 from app.repositories.base import BaseRepository
 
@@ -22,6 +23,24 @@ class UserRepository(BaseRepository[User]):
     async def get_by_login(self, identifier: str) -> User | None:
         stmt = select(User).where(
             or_(User.email == identifier.lower(), User.username == identifier)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_first_admin(self) -> User | None:
+        stmt = (
+            select(User)
+            .where(User.role == UserRole.ADMIN.value, User.is_active.is_(True))
+            .order_by(User.created_at)
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_first_active(self) -> User | None:
+        stmt = (
+            select(User)
+            .where(User.is_active.is_(True))
+            .order_by(User.created_at)
+            .limit(1)
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 

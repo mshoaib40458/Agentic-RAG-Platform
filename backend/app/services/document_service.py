@@ -23,6 +23,7 @@ from app.db.models.document import Document
 from app.db.models.user import User
 from app.ingestion.pipeline import DocumentIngestor
 from app.repositories.document_repo import DocumentRepository
+from app.repositories.query_repo import QueryRepository
 from app.retrieval import bm25
 from app.schemas.document import DocumentStats, DocumentUpdate
 
@@ -87,6 +88,7 @@ class DocumentService:
 
         ingestor = DocumentIngestor(self.session)
         await ingestor.run(document)
+        await self.session.refresh(document)
         bm25.invalidate()
         return document
 
@@ -156,6 +158,7 @@ class DocumentService:
         if update.collection is not None:
             document.collection = update.collection
         await self.session.flush()
+        await self.session.refresh(document)
         bm25.invalidate()
         return document
 
@@ -170,6 +173,7 @@ class DocumentService:
 
         path = Path(document.storage_path)
         await self.documents.delete(document)
+        await QueryRepository(self.session).scrub_document_references(document.id)
         await self.session.flush()
         await asyncio.to_thread(path.unlink, missing_ok=True)
         bm25.invalidate()

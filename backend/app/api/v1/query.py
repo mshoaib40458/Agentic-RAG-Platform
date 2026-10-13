@@ -20,8 +20,10 @@ QueryDep = Annotated[User, Depends(require_permission(Permission.QUERY))]
 
 @router.post("", response_model=QueryRead)
 async def submit_query(payload: QueryRequest, session: SessionDep, user: QueryDep) -> QueryRead:
-    query = await QueryService(session).run(user=user, request=payload)
-    return QueryRead.model_validate(query)
+    query, conversation_id = await QueryService(session).run(user=user, request=payload)
+    read = QueryRead.model_validate(query)
+    read.conversation_id = conversation_id
+    return read
 
 
 @router.get("", response_model=Page[QueryRead])

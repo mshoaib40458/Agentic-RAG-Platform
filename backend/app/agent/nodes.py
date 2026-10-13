@@ -113,12 +113,16 @@ class AgentNodes:
     async def plan(self, state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         question = state["question"]
+        history = state.get("history") or []
         allow_decomposition = self.settings.agent_enable_query_decomposition
 
         parsed, usage = await self._chat_json(
-            prompts.router_messages(question, allow_decomposition=allow_decomposition),
+            prompts.router_messages(
+                question, allow_decomposition=allow_decomposition, history=history
+            ),
             fallback=None,
         )
+        standalone = ""
         if parsed is None or parsed.get("intent") not in _VALID_INTENTS:
             # Conservative fallback: treat as a single retrieval pass.
             intent = QueryIntent.DIRECT.value
@@ -127,12 +131,20 @@ class AgentNodes:
             intent = str(parsed["intent"])
             raw_sub = parsed.get("sub_queries") or []
             sub_queries = [str(q) for q in raw_sub if str(q).strip()][:4]
+            standalone = str(parsed.get("standalone_query") or "").strip()
+
+        # When the user has documents to search, a vague reference such as "this
+        # file" or "the document" should retrieve over them rather than bounce
+        # back a clarification. Only clarify when there is nothing to retrieve.
+        if intent == QueryIntent.CLARIFY.value and state.get("accessible_document_ids"):
+            logger.info("clarify_overridden_to_direct")
+            intent = QueryIntent.DIRECT.value
 
         single_pass = intent == QueryIntent.DIRECT.value or (
             intent == QueryIntent.MULTI_STEP.value and not sub_queries
         )
         if single_pass:
-            sub_queries = [question]
+            sub_queries = [standalone or question]
 
         if intent == QueryIntent.CLARIFY.value:
             clarification = parsed.get("clarification") if parsed else None
@@ -143,6 +155,7 @@ class AgentNodes:
             return {
                 "intent": intent,
                 "sub_queries": [],
+                "standalone_query": standalone or question,
                 "final_answer": answer,
                 "citations": [],
                 "used_evidence": [],
@@ -154,6 +167,7 @@ class AgentNodes:
         return {
             "intent": intent,
             "sub_queries": sub_queries,
+            "standalone_query": standalone or question,
             "current_query_index": 0,
             "stage_timings": {"plan": time.perf_counter() - started},
             "usage": self._merge_usage(state, usage),
@@ -227,7 +241,8 @@ class AgentNodes:
             gate = "no_dense_signal"
 
         parsed, usage = await self._chat_json(
-            prompts.grade_messages(state["question"], evidence), fallback=None
+            prompts.grade_messages(state.get("standalone_query") or state["question"], evidence),
+            fallback=None,
         )
         if parsed is None:
             sufficient = threshold_ok
@@ -251,7 +266,9 @@ class AgentNodes:
         strict = state.get("generation_attempts", 0) > 0
         try:
             result = await self.chat_model.chat(
-                prompts.generate_messages(state["question"], evidence, strict=strict)
+                prompts.generate_messages(
+                    state["question"], evidence, strict=strict, history=state.get("history") or []
+                )
             )
         except ProviderError:
             logger.warning("agent_generation_unavailable")
@@ -296,7 +313,11 @@ class AgentNodes:
         started = time.perf_counter()
         evidence = self._dedup(state.get("evidence", []))
         parsed, usage = await self._chat_json(
-            prompts.verify_messages(state["question"], state.get("draft_answer", ""), evidence),
+            prompts.verify_messages(
+                state.get("standalone_query") or state["question"],
+                state.get("draft_answer", ""),
+                evidence,
+            ),
             fallback={
                 "status": VerificationStatus.SKIPPED.value,
                 "reason": "verification_unavailable",
@@ -320,7 +341,11 @@ class AgentNodes:
         model = ""
         usage = {"prompt_tokens": 0, "completion_tokens": 0}
         try:
-            result = await self.chat_model.chat(prompts.no_retrieval_messages(state["question"]))
+            result = await self.chat_model.chat(
+                prompts.no_retrieval_messages(
+                    state["question"], history=state.get("history") or []
+                )
+            )
         except ProviderError:
             logger.warning("agent_no_retrieval_call_failed")
         else:

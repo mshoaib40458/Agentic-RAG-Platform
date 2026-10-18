@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import DocumentStatus
@@ -19,6 +19,8 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         # Duplicate ingestion is scoped per owner (SRS FR-013).
         UniqueConstraint("owner_id", "checksum", name="uq_documents_owner_checksum"),
+        Index("ix_documents_owner_status", "owner_id", "status"),
+        Index("ix_documents_collection_status", "collection", "status"),
     )
 
     filename: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -52,6 +54,9 @@ class Document(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class DocumentChunk(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "document_chunks"
+    __table_args__ = (
+        Index("ix_chunks_document_index", "document_id", "chunk_index"),
+    )
 
     document_id: Mapped[str] = mapped_column(
         ForeignKey("documents.id", ondelete="CASCADE"), index=True, nullable=False

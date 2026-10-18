@@ -46,7 +46,9 @@ def build_agent_graph(nodes: AgentNodes) -> Any:
         "generate", nodes.route_after_generate, {"verify": "verify", "respond": "respond"}
     )
     graph.add_conditional_edges(
-        "verify", nodes.route_after_verify, {"generate": "generate", "respond": "respond"}
+        "verify",
+        nodes.route_after_verify,
+        {"generate": "generate", "respond": "respond", "abstain": "abstain"},
     )
     graph.add_edge("no_retrieval", "respond")
     graph.add_edge("abstain", "respond")

@@ -100,11 +100,22 @@ export function DocumentsPage() {
   const documents = useQuery({
     queryKey: queryKeys.documents(params),
     queryFn: () => listDocuments(params),
+    refetchInterval: (query) => {
+      const hasPending = query.state.data?.items.some(
+        (doc) => doc.status === "queued" || doc.status === "processing",
+      );
+      return hasPending ? 2500 : false;
+    },
   });
 
   const stats = useQuery({
     queryKey: queryKeys.documentStats,
     queryFn: getDocumentStats,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      const hasPending = data ? data.processing + data.queued > 0 : false;
+      return hasPending ? 2500 : false;
+    },
   });
 
   const canWrite = can("documents:write");

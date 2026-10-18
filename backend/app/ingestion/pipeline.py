@@ -13,6 +13,7 @@ are committed so a failed upsert cannot report a partial success (SRS NFR-006).
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 import logging
 import uuid
@@ -84,10 +85,14 @@ class DocumentIngestor:
             logger.warning("ingestion_failed", extra={"document_id": document.id, "code": exc.code})
             document.status = DocumentStatus.FAILED.value
             document.error_message = exc.message
+            with contextlib.suppress(Exception):
+                await self.vector_store.delete_by_document(document.id)
         except Exception:  # noqa: BLE001 - never leak internals to the client
             logger.exception("ingestion_unexpected_error", extra={"document_id": document.id})
             document.status = DocumentStatus.FAILED.value
             document.error_message = "Unexpected error during processing."
+            with contextlib.suppress(Exception):
+                await self.vector_store.delete_by_document(document.id)
         else:
             document.status = DocumentStatus.INDEXED.value
             document.chunk_count = chunk_count
@@ -155,7 +160,11 @@ class DocumentIngestor:
                 )
             )
 
-        await self.vector_store.upsert(records)
+        # Upsert in bounded batches of 100 to avoid excessive payload sizes
+        batch_size = 100
+        for i in range(0, len(records), batch_size):
+            await self.vector_store.upsert(records[i : i + batch_size])
+
         self.session.add_all(chunk_rows)
         await self.session.flush()
         return len(chunk_rows)

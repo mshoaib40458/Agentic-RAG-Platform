@@ -50,25 +50,42 @@ class HybridRetriever:
         top_k: int | None = None,
         candidate_k: int | None = None,
         mode: RetrievalMode = "hybrid_rerank",
+        tenant_context: dict[str, str] | None = None,
     ) -> list[RetrievedChunk]:
         top_k = top_k or self.settings.retrieval_top_k
         candidate_k = candidate_k or self.settings.retrieval_candidate_k
 
         if mode == "dense":
             return await self.dense.retrieve(
-                query, limit=top_k, document_ids=document_ids, extra_filters=extra_filters
+                query,
+                limit=top_k,
+                document_ids=document_ids,
+                extra_filters=extra_filters,
+                tenant_context=tenant_context,
             )
         if mode == "bm25":
             return await self.bm25.retrieve(
-                query, limit=top_k, document_ids=document_ids, extra_filters=extra_filters
+                query,
+                limit=top_k,
+                document_ids=document_ids,
+                extra_filters=extra_filters,
+                tenant_context=tenant_context,
             )
 
         dense_hits, bm25_hits = await asyncio.gather(
             self.dense.retrieve(
-                query, limit=candidate_k, document_ids=document_ids, extra_filters=extra_filters
+                query,
+                limit=candidate_k,
+                document_ids=document_ids,
+                extra_filters=extra_filters,
+                tenant_context=tenant_context,
             ),
             self.bm25.retrieve(
-                query, limit=candidate_k, document_ids=document_ids, extra_filters=extra_filters
+                query,
+                limit=candidate_k,
+                document_ids=document_ids,
+                extra_filters=extra_filters,
+                tenant_context=tenant_context,
             ),
         )
         fused = reciprocal_rank_fusion([dense_hits, bm25_hits], k=self.settings.rrf_k)

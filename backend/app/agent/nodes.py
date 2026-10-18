@@ -183,8 +183,17 @@ class AgentNodes:
         filters = state.get("filters", {})
         accessible = state.get("accessible_document_ids", [])
         requested = filters.get("document_ids")
+        role = state.get("role", "")
+        user_id = state.get("user_id", "")
+
+        tenant_context: dict[str, str] | None = None
         if requested:
             allowed = [doc_id for doc_id in requested if doc_id in set(accessible)]
+        elif not accessible and role != "admin":
+            allowed = []
+        elif user_id and role:
+            allowed = None
+            tenant_context = {"user_id": user_id, "role": role}
         else:
             allowed = accessible
 
@@ -198,6 +207,7 @@ class AgentNodes:
             query,
             document_ids=allowed,
             extra_filters=extra_filters or None,
+            tenant_context=tenant_context,
             top_k=state.get("top_k", self.settings.retrieval_top_k),
             mode=state.get("retrieval_mode", "hybrid_rerank"),  # type: ignore[arg-type]
         )
@@ -422,6 +432,9 @@ class AgentNodes:
     def route_after_verify(self, state: AgentState) -> str:
         unsupported = state.get("verification_status") == VerificationStatus.UNSUPPORTED.value
         can_regenerate = state.get("generation_attempts", 0) < 2
-        if unsupported and can_regenerate:
-            return "generate"
+        if unsupported:
+            if can_regenerate:
+                return "generate"
+            return "abstain"
         return "respond"
+

@@ -43,6 +43,9 @@ def test_upload_succeeds_and_serializes_timestamps(client, monkeypatch):
         async def delete_by_document(self, document_id):
             return None
 
+        async def update_document_metadata(self, document_id, metadata):
+            return None
+
     monkeypatch.setattr(pipeline, "get_embedding_model", lambda: _StubEmbedding())
     monkeypatch.setattr(pipeline, "get_vector_store", lambda: _StubVectorStore())
 

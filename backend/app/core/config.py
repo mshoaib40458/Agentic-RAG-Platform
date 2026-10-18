@@ -205,3 +205,9 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Return a cached ``Settings`` instance (safe to use as a FastAPI dependency)."""
     return Settings()
+
+
+def reset_settings() -> None:
+    """Clear the cached ``Settings`` instance (used by tests)."""
+    get_settings.cache_clear()
+

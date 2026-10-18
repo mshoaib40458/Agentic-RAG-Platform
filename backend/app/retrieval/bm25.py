@@ -36,6 +36,8 @@ class _IndexEntry:
     document_name: str
     category: str | None
     collection: str
+    owner_id: str
+    tokens: frozenset[str]
 
 
 class _BM25Index:
@@ -78,6 +80,7 @@ class BM25Retriever:
                 Document.filename,
                 Document.category,
                 Document.collection,
+                Document.owner_id,
             )
             .join(Document, DocumentChunk.document_id == Document.id)
             .where(Document.status == DocumentStatus.INDEXED.value)
@@ -93,6 +96,8 @@ class BM25Retriever:
                 document_name=row[5],
                 category=row[6],
                 collection=row[7],
+                owner_id=row[8],
+                tokens=frozenset(_tokenize(row[1])),
             )
             for row in rows
         ]
@@ -117,6 +122,7 @@ class BM25Retriever:
         limit: int,
         document_ids: list[str] | None = None,
         extra_filters: dict[str, str] | None = None,
+        tenant_context: dict[str, str] | None = None,
     ) -> list[RetrievedChunk]:
         if document_ids is not None and not document_ids:
             return []
@@ -125,6 +131,9 @@ class BM25Retriever:
             return []
 
         allowed_docs = set(document_ids) if document_ids is not None else None
+        is_admin = tenant_context.get("role") == "admin" if tenant_context else True
+        tenant_user = tenant_context.get("user_id") if tenant_context else None
+
         query_tokens = set(_tokenize(query))
         scores = index.scores(query)
         ranked = sorted(range(len(index.entries)), key=lambda i: scores[i], reverse=True)
@@ -136,10 +145,13 @@ class BM25Retriever:
             # occur in nearly every document; a score <= 0 does not mean the
             # passage is irrelevant. Inclusion is decided by token overlap, and
             # the (possibly negative) score only orders the overlapping results.
-            if not (query_tokens & set(_tokenize(entry.text))):
+            if not (query_tokens & entry.tokens):
                 continue
             if allowed_docs is not None and entry.document_id not in allowed_docs:
                 continue
+            if allowed_docs is None and not is_admin and tenant_user:
+                if entry.owner_id != tenant_user and entry.collection != "public":
+                    continue
             if extra_filters:
                 if "category" in extra_filters and entry.category != extra_filters["category"]:
                     continue

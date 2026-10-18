@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from pathlib import Path
+from typing import Any
 
+from sqlalchemy import event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -28,13 +30,21 @@ def build_engine(database_url: str | None = None) -> AsyncEngine:
     settings = get_settings()
     url = database_url or settings.database_url
     _ensure_sqlite_parent(url)
-    return create_async_engine(
+    eng = create_async_engine(
         url,
         echo=False,
         future=True,
         pool_pre_ping=True,
         connect_args={"check_same_thread": False} if url.startswith("sqlite") else {},
     )
+    if url.startswith("sqlite"):
+        @event.listens_for(eng.sync_engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection: Any, connection_record: Any) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+    return eng
 
 
 engine: AsyncEngine = build_engine()

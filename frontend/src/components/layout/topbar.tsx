@@ -2,6 +2,7 @@ import { Menu } from "lucide-react";
 
 import { Brand } from "@/components/layout/sidebar-nav";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
+import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
@@ -19,8 +20,9 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       <div className="lg:hidden">
         <Brand />
       </div>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex items-center gap-2">
         <ThemeToggle />
+        <UserMenu />
       </div>
     </header>
   );

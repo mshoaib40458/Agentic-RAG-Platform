@@ -57,59 +57,67 @@ async def evaluate_dataset(
     if include_answer_metrics:
         all_document_ids = await _all_document_ids(session)
 
+    failed_items = 0
     for item in items:
         if not item.has_labels:
             continue
-        chunks = await retriever.retrieve(
-            item.question,
-            document_ids=None,
-            top_k=top_k,
-            candidate_k=int(candidate_k) if candidate_k else None,
-            mode=mode,  # type: ignore[arg-type]
-        )
-        use_chunks = bool(item.relevant_chunk_ids)
-        relevant = set(item.relevant_chunk_ids or item.relevant_document_ids)
-        retrieved_ids = [chunk.id if use_chunks else chunk.document_id for chunk in chunks]
-
-        answer_f1: float | None = None
-        generated_answer: str | None = None
-        if include_answer_metrics and item.expected_answer:
-            from app.agent.runner import AgentRunner
-            from app.llm.groq_client import get_chat_model
-
-            runner = AgentRunner(
-                retriever=HybridRetriever(session),
-                chat_model=get_chat_model(),
-            )
-            result = await runner.run(
-                question=item.question,
-                user_id="evaluation",
-                role="evaluator",
-                accessible_document_ids=all_document_ids,
-                retrieval_mode=mode,
+        try:
+            chunks = await retriever.retrieve(
+                item.question,
+                document_ids=None,
                 top_k=top_k,
+                candidate_k=int(candidate_k) if candidate_k else None,
+                mode=mode,  # type: ignore[arg-type]
             )
-            generated_answer = result.answer
-            answer_f1 = token_f1(result.answer, item.expected_answer)
+            use_chunks = bool(item.relevant_chunk_ids)
+            relevant = set(item.relevant_chunk_ids or item.relevant_document_ids)
+            retrieved_ids = [chunk.id if use_chunks else chunk.document_id for chunk in chunks]
 
-        accumulator.add(
-            recall=recall_at_k(retrieved_ids, relevant, top_k),
-            precision=precision_at_k(retrieved_ids, relevant, top_k),
-            mrr=reciprocal_rank(retrieved_ids, relevant),
-            ndcg=ndcg_at_k(retrieved_ids, relevant, top_k),
-            hit_rate=hit_rate_at_k(retrieved_ids, relevant, top_k),
-            answer_f1=answer_f1,
-        )
-        per_item.append(
-            {
-                "question": item.question,
-                "retrieved_ids": retrieved_ids,
-                "relevant_ids": sorted(relevant),
-                "expected_answer": item.expected_answer,
-                "generated_answer": generated_answer,
-                "answer_f1": answer_f1,
-            }
-        )
+            answer_f1: float | None = None
+            generated_answer: str | None = None
+            if include_answer_metrics and item.expected_answer:
+                from app.agent.runner import AgentRunner
+                from app.llm.groq_client import get_chat_model
+
+                runner = AgentRunner(
+                    retriever=HybridRetriever(session),
+                    chat_model=get_chat_model(),
+                )
+                result = await runner.run(
+                    question=item.question,
+                    user_id="evaluation",
+                    role="evaluator",
+                    accessible_document_ids=all_document_ids,
+                    retrieval_mode=mode,
+                    top_k=top_k,
+                )
+                generated_answer = result.answer
+                answer_f1 = token_f1(result.answer, item.expected_answer)
+
+            accumulator.add(
+                recall=recall_at_k(retrieved_ids, relevant, top_k),
+                precision=precision_at_k(retrieved_ids, relevant, top_k),
+                mrr=reciprocal_rank(retrieved_ids, relevant),
+                ndcg=ndcg_at_k(retrieved_ids, relevant, top_k),
+                hit_rate=hit_rate_at_k(retrieved_ids, relevant, top_k),
+                answer_f1=answer_f1,
+            )
+            per_item.append(
+                {
+                    "question": item.question,
+                    "retrieved_ids": retrieved_ids,
+                    "relevant_ids": sorted(relevant),
+                    "expected_answer": item.expected_answer,
+                    "generated_answer": generated_answer,
+                    "answer_f1": answer_f1,
+                }
+            )
+        except Exception:
+            logger.warning(
+                "evaluation_item_failed", extra={"question": item.question}, exc_info=True
+            )
+            failed_items += 1
+            continue
 
     metrics = accumulator.mean()
     return {
@@ -117,6 +125,7 @@ async def evaluate_dataset(
         "top_k": top_k,
         "candidate_k": candidate_k,
         "evaluated_items": len(per_item),
+        "failed_items": failed_items,
         "metrics": metrics,
         "per_item": per_item,
     }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Integer, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -18,6 +18,7 @@ class Feedback(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "feedback"
     __table_args__ = (
         CheckConstraint("rating IN (-1, 1)", name="rating_valid"),
+        UniqueConstraint("query_id", "user_id", name="uq_feedback_query_user"),
     )
 
     user_id: Mapped[str] = mapped_column(

@@ -52,14 +52,19 @@ class VectorStore(Protocol):
         limit: int,
         document_ids: list[str] | None = None,
         extra_filters: dict[str, str] | None = None,
+        tenant_context: dict[str, str] | None = None,
     ) -> list[SearchHit]: ...
+    async def update_document_metadata(self, document_id: str, metadata: dict[str, Any]) -> None: ...
     async def delete_by_document(self, document_id: str) -> None: ...
     async def delete_ids(self, ids: list[str]) -> None: ...
     async def count(self) -> int: ...
 
 
 def _build_filter(
-    models: Any, document_ids: list[str] | None, extra_filters: dict[str, str] | None
+    models: Any,
+    document_ids: list[str] | None,
+    extra_filters: dict[str, str] | None,
+    tenant_context: dict[str, str] | None = None,
 ) -> Any | None:
     must: list[Any] = []
     if document_ids is not None:
@@ -71,6 +76,19 @@ def _build_filter(
         must.append(
             models.FieldCondition(key="document_id", match=models.MatchAny(any=document_ids))
         )
+    elif tenant_context is not None:
+        role = tenant_context.get("role")
+        user_id = tenant_context.get("user_id")
+        if role != "admin" and user_id:
+            # Non-admin tenant isolation: user can only see their own documents OR public collection
+            must.append(
+                models.Filter(
+                    should=[
+                        models.FieldCondition(key="owner_id", match=models.MatchValue(value=user_id)),
+                        models.FieldCondition(key="collection", match=models.MatchValue(value="public")),
+                    ]
+                )
+            )
     for key, value in (extra_filters or {}).items():
         must.append(models.FieldCondition(key=key, match=models.MatchValue(value=value)))
     return models.Filter(must=must) if must else None
@@ -98,10 +116,24 @@ class QdrantVectorStore:
             )
         self._ensure_collection()
 
+    def _ensure_payload_indexes(self) -> None:
+        """Create keyword payload indexes on frequently filtered fields."""
+        indexed_fields = ("document_id", "owner_id", "collection", "category")
+        for field_name in indexed_fields:
+            try:
+                self._client.create_payload_index(
+                    collection_name=self._collection,
+                    field_name=field_name,
+                    field_schema=self._models.PayloadSchemaType.KEYWORD,
+                )
+            except Exception:  # noqa: BLE001 - indexing is best-effort (e.g. local Qdrant ignores)
+                pass
+
     def _ensure_collection(self) -> None:
         models = self._models
         if self._client.collection_exists(self._collection):
             self._verify_dimension()
+            self._ensure_payload_indexes()
             return
         self._client.create_collection(
             collection_name=self._collection,
@@ -110,6 +142,7 @@ class QdrantVectorStore:
             ),
         )
         logger.info("created_vector_collection", extra={"collection": self._collection})
+        self._ensure_payload_indexes()
 
     def _verify_dimension(self) -> None:
         """Fail fast when the collection was built for a different embedding model.
@@ -156,10 +189,13 @@ class QdrantVectorStore:
         limit: int,
         document_ids: list[str] | None = None,
         extra_filters: dict[str, str] | None = None,
+        tenant_context: dict[str, str] | None = None,
     ) -> list[SearchHit]:
         if document_ids is not None and not document_ids:
             return []
-        query_filter = _build_filter(self._models, document_ids, extra_filters)
+        query_filter = _build_filter(
+            self._models, document_ids, extra_filters, tenant_context=tenant_context
+        )
         try:
             results = await asyncio.to_thread(
                 self._query,
@@ -173,6 +209,31 @@ class QdrantVectorStore:
             SearchHit(id=str(point.id), score=float(point.score), payload=point.payload or {})
             for point in results
         ]
+
+    async def update_document_metadata(self, document_id: str, metadata: dict[str, Any]) -> None:
+        """Update payload metadata across all chunks belonging to a document."""
+        if not metadata:
+            return
+        models = self._models
+        selector = models.FilterSelector(
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="document_id", match=models.MatchValue(value=document_id)
+                    )
+                ]
+            )
+        )
+        try:
+            await asyncio.to_thread(
+                self._client.set_payload,
+                collection_name=self._collection,
+                payload=metadata,
+                points=selector,
+                wait=True,
+            )
+        except Exception as exc:  # noqa: BLE001 - normalize provider errors
+            raise RetrievalError("Failed to update vector payload metadata.") from exc
 
     def _query(self, vector: list[float], *, limit: int, query_filter: Any) -> list[Any]:
         # ``search`` was removed in qdrant-client >= 1.16 in favour of

@@ -101,20 +101,41 @@ class HuggingFaceEmbeddingModel:
             return []
         url = f"{_HF_INFERENCE_BASE}/{self._settings.embedding_model}"
         headers = {"Authorization": f"Bearer {self._settings.hf_api_token}"}
-        payload = {"inputs": texts, "options": {"wait_for_model": True}}
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(url, headers=headers, json=payload)
-                response.raise_for_status()
-                data = response.json()
-        except httpx.HTTPError as exc:
-            raise ProviderError(
-                "Hugging Face inference request failed.", code="embeddings_failed"
-            ) from exc
-        # The API returns a list of vectors for a batched input.
-        if data and isinstance(data[0], (int, float)):
-            return [data]
-        return data
+        batch_size = max(1, self._settings.embedding_batch_size)
+        results: list[list[float]] = []
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for i in range(0, len(texts), batch_size):
+                batch = texts[i : i + batch_size]
+                payload = {"inputs": batch, "options": {"wait_for_model": True}}
+                data = None
+                max_retries = 3
+                for attempt in range(max_retries):
+                    try:
+                        response = await client.post(url, headers=headers, json=payload)
+                        if (
+                            response.status_code in {429, 503, 504}
+                            and attempt < max_retries - 1
+                        ):
+                            await asyncio.sleep(0.5 * (2**attempt))
+                            continue
+                        response.raise_for_status()
+                        data = response.json()
+                        break
+                    except httpx.HTTPError as exc:
+                        if attempt < max_retries - 1:
+                            await asyncio.sleep(0.5 * (2**attempt))
+                            continue
+                        raise ProviderError(
+                            "Hugging Face inference request failed.", code="embeddings_failed"
+                        ) from exc
+
+                # The API returns a list of vectors for a batched input.
+                if data and isinstance(data[0], (int, float)):
+                    results.append(data)
+                elif data:
+                    results.extend(data)
+        return results
 
     async def embed_query(self, text: str) -> list[float]:
         vectors = await self.embed_documents([text])

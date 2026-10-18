@@ -21,9 +21,20 @@ async def health(session: SessionDep) -> HealthResponse:
         await session.execute(text("SELECT 1"))
     except Exception:  # noqa: BLE001 - report degraded rather than failing the probe
         database = "unavailable"
+
+    vector_store = "ok"
+    try:
+        from app.retrieval.vector_store import get_vector_store
+
+        await get_vector_store().count()
+    except Exception:  # noqa: BLE001 - report degraded rather than failing the probe
+        vector_store = "unavailable"
+
+    is_ok = database == "ok" and vector_store == "ok"
     return HealthResponse(
-        status="ok" if database == "ok" else "degraded",
+        status="ok" if is_ok else "degraded",
         version=__version__,
         environment=settings.environment,
         database=database,
+        vector_store=vector_store,
     )

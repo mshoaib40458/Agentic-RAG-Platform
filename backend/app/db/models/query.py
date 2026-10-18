@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.constants import QueryStatus, VerificationStatus
@@ -17,6 +17,10 @@ if TYPE_CHECKING:
 
 class Query(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "queries"
+    __table_args__ = (
+        Index("ix_queries_user_created", "user_id", "created_at"),
+        Index("ix_queries_user_status", "user_id", "status"),
+    )
 
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False

@@ -19,10 +19,15 @@ class DenseRetriever:
         limit: int,
         document_ids: list[str] | None = None,
         extra_filters: dict[str, str] | None = None,
+        tenant_context: dict[str, str] | None = None,
     ) -> list[RetrievedChunk]:
         vector = await self.embedding_model.embed_query(query)
         hits = await self.vector_store.search(
-            vector, limit=limit, document_ids=document_ids, extra_filters=extra_filters
+            vector,
+            limit=limit,
+            document_ids=document_ids,
+            extra_filters=extra_filters,
+            tenant_context=tenant_context,
         )
         return [
             RetrievedChunk(

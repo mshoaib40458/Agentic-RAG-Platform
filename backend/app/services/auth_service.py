@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.constants import UserRole
 from app.core.exceptions import AuthenticationError, ConflictError, NotFoundError
 from app.core.security import (
     create_access_token,
@@ -17,6 +18,10 @@ from app.db.models.user import User
 from app.repositories.user_repo import UserRepository
 from app.schemas.auth import Token, UserCreate, UserRead
 
+# A fixed valid Argon2id hash used to maintain constant verification time when
+# a user is not found, mitigating username enumeration via timing analysis.
+_DUMMY_HASH = "$argon2id$v=19$m=65536,t=3,p=4$c29tZXNhbHQ$RdescudvJCsgqlfreOJRomIMacPdIhBs"
+
 
 class AuthService:
     def __init__(self, session: AsyncSession) -> None:
@@ -26,18 +31,26 @@ class AuthService:
     async def register(self, data: UserCreate) -> User:
         if await self.users.exists(email=data.email, username=data.username):
             raise ConflictError("Email or username is already registered.")
+        role = data.role.value
+        if role == UserRole.ADMIN.value:
+            # Defense-in-depth: only permit admin bootstrap if no admin exists yet
+            existing_admin = await self.users.get_first_admin()
+            if existing_admin is not None:
+                role = UserRole.USER.value
         user = User(
             email=data.email.lower(),
             username=data.username,
             hashed_password=hash_password(data.password),
-            role=data.role.value,
+            role=role,
         )
         return await self.users.add(user)
 
     async def authenticate(self, identifier: str, password: str) -> User:
         user = await self.users.get_by_login(identifier)
-        # Constant-ish behavior: always run a verify to reduce user enumeration.
-        if user is None or not verify_password(password, user.hashed_password):
+        # Always run verify_password to ensure constant-time response and prevent user enumeration
+        target_hash = user.hashed_password if user is not None else _DUMMY_HASH
+        is_valid = verify_password(password, target_hash)
+        if user is None or not is_valid:
             raise AuthenticationError("Invalid username or password.")
         if not user.is_active:
             raise AuthenticationError("This account is disabled.", code="account_disabled")

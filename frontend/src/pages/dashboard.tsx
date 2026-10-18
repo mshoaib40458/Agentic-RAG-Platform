@@ -135,6 +135,16 @@ export function DashboardPage() {
                     {titleCase(health.data.database)}
                   </dd>
                 </div>
+                {health.data.vector_store ? (
+                  <div className="flex items-center justify-between">
+                    <dt className="flex items-center gap-2 text-muted-foreground">
+                      <Layers className="h-4 w-4" /> Vector store
+                    </dt>
+                    <dd className="font-medium">
+                      {titleCase(health.data.vector_store)}
+                    </dd>
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-between">
                   <dt className="flex items-center gap-2 text-muted-foreground">
                     <ServerCog className="h-4 w-4" /> Version

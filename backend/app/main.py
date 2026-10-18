@@ -69,7 +69,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         warmup_task.cancel()
         from app.db.session import dispose_engine
+        from app.retrieval.vector_store import get_vector_store
 
+        get_vector_store().close()
         await dispose_engine()
         logger.info("application_stopped")
 

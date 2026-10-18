@@ -49,6 +49,13 @@ export function EvaluationsPage() {
   const evaluations = useQuery({
     queryKey: queryKeys.evaluations(params),
     queryFn: () => listEvaluations(params),
+    refetchInterval: (query) => {
+      const hasPending = query.state.data?.items.some(
+        (evaluation) =>
+          evaluation.status === "running" || evaluation.status === "pending",
+      );
+      return hasPending ? 3000 : false;
+    },
   });
 
   const total = evaluations.data?.total ?? 0;

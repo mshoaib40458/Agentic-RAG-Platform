@@ -42,8 +42,14 @@ def build_context(evidence: list[dict[str, Any]]) -> str:
     return "\n\n".join(blocks) if blocks else "(no evidence)"
 
 
-def render_history(history: list[dict[str, str]] | None) -> str:
-    """Render prior chat turns as plain text for prompt context."""
+def render_history(
+    history: list[dict[str, str]] | None, *, max_chars_per_turn: int = 1000
+) -> str:
+    """Render prior chat turns as plain text for prompt context.
+
+    Long prior assistant turns are bounded to ``max_chars_per_turn`` to prevent
+    token inflation and context window exhaustion in deep conversations.
+    """
     if not history:
         return ""
     lines: list[str] = []
@@ -52,6 +58,8 @@ def render_history(history: list[dict[str, str]] | None) -> str:
         answer = str(turn.get("answer", "")).strip()
         if not question:
             continue
+        if len(answer) > max_chars_per_turn:
+            answer = answer[:max_chars_per_turn].rstrip() + "... [truncated]"
         lines.append(f"User: {question}\nAssistant: {answer or '(no answer)'}")
     return "\n\n".join(lines)
 

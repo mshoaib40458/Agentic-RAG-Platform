@@ -36,6 +36,7 @@ class HealthResponse(BaseModel):
     version: str
     environment: str
     database: str
+    vector_store: str = "ok"
 
 
 class Page(BaseModel, Generic[T]):

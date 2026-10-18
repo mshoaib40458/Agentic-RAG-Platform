@@ -7,6 +7,7 @@ import hashlib
 import logging
 import uuid
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.datastructures import UploadFile
@@ -61,7 +62,7 @@ class DocumentService:
         stored_path = self.settings.upload_path / f"{uuid.uuid4().hex}{extension}"
         try:
             size_bytes, checksum = await self._stream_to_disk(upload, stored_path)
-        except PayloadTooLargeError:
+        except Exception:
             stored_path.unlink(missing_ok=True)
             raise
 
@@ -153,12 +154,26 @@ class DocumentService:
         document = await self.get_document(document_id, user=user)
         if user.role != UserRole.ADMIN.value and document.owner_id != user.id:
             raise NotFoundError("Document not found.")
+        payload_updates: dict[str, Any] = {}
         if update.category is not None:
             document.category = update.category
+            payload_updates["category"] = update.category
         if update.collection is not None:
             document.collection = update.collection
+            payload_updates["collection"] = update.collection
         await self.session.flush()
         await self.session.refresh(document)
+        if payload_updates:
+            try:
+                from app.retrieval.vector_store import get_vector_store
+
+                await get_vector_store().update_document_metadata(document.id, payload_updates)
+            except Exception:
+                logger.warning(
+                    "failed_to_sync_vector_metadata",
+                    extra={"document_id": document.id},
+                    exc_info=True,
+                )
         bm25.invalidate()
         return document
 

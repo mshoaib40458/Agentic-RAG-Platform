@@ -100,8 +100,9 @@ export function AskPage() {
       if (result.conversation_id) setConversationId(result.conversation_id);
       void queryClient.invalidateQueries({ queryKey: ["conversations"] });
     },
-    onError: (error) => {
+    onError: (error, variables) => {
       setPendingQuestion(null);
+      setQuestion(variables.question);
       toast.error(getApiError(error).message);
     },
   });
@@ -561,7 +562,7 @@ function AssistantMessage({
             <div className="mt-2 space-y-2">
               {answer.citations.map((citation, index) => (
                 <CitationCard
-                  key={citation.chunk_id}
+                  key={`${citation.chunk_id}-${index}`}
                   citation={citation}
                   index={index + 1}
                 />
@@ -617,9 +618,11 @@ function CitationCard({
             </span>
           ) : null}
         </div>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {citation.score.toFixed(3)}
-        </span>
+        {typeof citation.score === "number" ? (
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {citation.score.toFixed(3)}
+          </span>
+        ) : null}
       </div>
       <p className="mt-2 text-sm text-muted-foreground">{citation.snippet}</p>
     </div>

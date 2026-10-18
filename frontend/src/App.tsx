@@ -19,6 +19,9 @@ const DocumentsPage = React.lazy(() =>
 const EvaluationsPage = React.lazy(() =>
   import("@/pages/evaluations").then((m) => ({ default: m.EvaluationsPage })),
 );
+const UsersPage = React.lazy(() =>
+  import("@/pages/users").then((m) => ({ default: m.UsersPage })),
+);
 const LoginPage = React.lazy(() =>
   import("@/pages/login").then((m) => ({ default: m.LoginPage })),
 );
@@ -69,6 +72,14 @@ export function App() {
                 element={
                   <RequirePermission permission="evaluations:run">
                     <EvaluationsPage />
+                  </RequirePermission>
+                }
+              />
+              <Route
+                path="/users"
+                element={
+                  <RequirePermission permission="users:manage">
+                    <UsersPage />
                   </RequirePermission>
                 }
               />

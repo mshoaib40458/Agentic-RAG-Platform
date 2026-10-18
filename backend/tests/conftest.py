@@ -23,6 +23,11 @@ os.environ["QDRANT_PATH"] = (_TMP / "qdrant").as_posix()
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["GROQ_API_KEY"] = "test-groq-key"
 os.environ["RERANKER_ENABLED"] = "false"
+os.environ["DISABLE_AUTH"] = "false"
+
+from app.core.config import reset_settings  # noqa: E402
+
+reset_settings()
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

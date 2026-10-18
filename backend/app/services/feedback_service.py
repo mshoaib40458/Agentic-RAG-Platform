@@ -44,4 +44,7 @@ class FeedbackService:
         query = await self.queries.get(query_id)
         if query is None:
             raise NotFoundError("Query not found.")
+        can_view_all = user.role in {UserRole.ADMIN.value, UserRole.EVALUATOR.value}
+        if query.user_id != user.id and not can_view_all:
+            raise NotFoundError("Query not found.")
         return await self.feedback.for_query(query_id)

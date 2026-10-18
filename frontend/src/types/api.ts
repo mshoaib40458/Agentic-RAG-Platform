@@ -165,6 +165,7 @@ export interface Health {
   version: string;
   environment: string;
   database: string;
+  vector_store?: string;
 }
 
 export interface ApiErrorBody {

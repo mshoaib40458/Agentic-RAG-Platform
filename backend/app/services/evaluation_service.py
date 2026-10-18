@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.constants import EvaluationStatus
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import BadRequestError, NotFoundError
 from app.db.models.evaluation import EvaluationRun
 from app.db.models.user import User
 from app.evaluation.runner import EvaluationRunner
@@ -21,7 +23,23 @@ class EvaluationService:
         self.repo = EvaluationRepository(session)
 
     async def create_run(self, payload: EvaluationCreate, *, user: User) -> EvaluationRun:
-        dataset_path = payload.dataset_path or self.settings.eval_dataset_path
+        eval_base_dir = Path(self.settings.eval_dataset_path).resolve().parent
+        if payload.dataset_path:
+            raw_path = Path(payload.dataset_path)
+            target_path = (
+                (eval_base_dir / raw_path).resolve()
+                if not raw_path.is_absolute()
+                else raw_path.resolve()
+            )
+            if not target_path.is_relative_to(eval_base_dir):
+                raise BadRequestError(
+                    "Evaluation dataset path must be located within the configured evaluation directory.",
+                    code="invalid_dataset_path",
+                )
+            dataset_path = str(target_path)
+        else:
+            dataset_path = str(Path(self.settings.eval_dataset_path).resolve())
+
         run = EvaluationRun(
             dataset_version=payload.dataset_version,
             dataset_path=dataset_path,

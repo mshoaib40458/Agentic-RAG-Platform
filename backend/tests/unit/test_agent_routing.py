@@ -68,7 +68,7 @@ def test_generate_skips_verification_on_error_or_when_disabled():
     assert nodes.route_after_generate({}) == "respond"
 
 
-def test_verify_regenerates_once_then_responds():
+def test_verify_regenerates_once_then_abstains():
     nodes = _nodes()
     unsupported_first = {
         "verification_status": VerificationStatus.UNSUPPORTED.value,
@@ -80,7 +80,7 @@ def test_verify_regenerates_once_then_responds():
         "verification_status": VerificationStatus.UNSUPPORTED.value,
         "generation_attempts": 2,
     }
-    assert nodes.route_after_verify(unsupported_second) == "respond"
+    assert nodes.route_after_verify(unsupported_second) == "abstain"
 
     supported = {
         "verification_status": VerificationStatus.SUPPORTED.value,

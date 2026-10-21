@@ -410,19 +410,19 @@ function ConversationRow({
   return (
     <div
       className={cn(
-        "group flex items-center gap-1 rounded-lg transition-colors",
-        active ? "bg-accent" : "hover:bg-accent/50",
+        "group flex w-full items-center justify-between gap-1 rounded-lg pr-1 transition-colors",
+        active ? "bg-accent" : "hover:bg-accent/60",
       )}
     >
       <button
         type="button"
         onClick={() => onSelect(conversation.id)}
-        className="min-w-0 flex-1 px-3 py-2 text-left"
+        className="min-w-0 flex-1 px-3 py-2 text-left overflow-hidden"
       >
         <span className="block truncate text-sm font-medium">
           {conversation.title}
         </span>
-        <span className="block text-xs text-muted-foreground">
+        <span className="block truncate text-xs text-muted-foreground">
           {conversation.turn_count}{" "}
           {conversation.turn_count === 1 ? "message" : "messages"} ·{" "}
           {formatRelative(conversation.updated_at)}
@@ -434,20 +434,21 @@ function ConversationRow({
             variant="ghost"
             size="icon"
             aria-label="Conversation options"
-            className="mr-1 h-8 w-8 shrink-0 text-muted-foreground"
+            className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-background/80 hover:text-foreground focus:opacity-100"
             disabled={deleting}
           >
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" className="w-36">
           <DropdownMenuItem
             variant="destructive"
             disabled={deleting}
             onSelect={() => onDelete(conversation.id)}
+            className="cursor-pointer"
           >
-            <Trash2 className="h-4 w-4" />
-            Delete
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete chat
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

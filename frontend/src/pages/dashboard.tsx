@@ -11,7 +11,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/contexts/auth-context";
 import { formatNumber, titleCase } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
 
@@ -45,8 +44,6 @@ function StatCard({
 }
 
 export function DashboardPage() {
-  const { user } = useAuth();
-
   const stats = useQuery({
     queryKey: queryKeys.documentStats,
     queryFn: getDocumentStats,
@@ -60,7 +57,7 @@ export function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome${user ? `, ${user.username}` : ""}`}
+        title="Welcome"
         description="Your workspace at a glance."
       />
 

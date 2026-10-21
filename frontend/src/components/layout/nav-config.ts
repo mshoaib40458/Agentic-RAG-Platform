@@ -3,7 +3,6 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquare,
-  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -46,12 +45,5 @@ export const NAV_ITEMS: NavItem[] = [
     icon: ClipboardList,
     permission: "evaluations:run",
     description: "Measure retrieval quality",
-  },
-  {
-    to: "/users",
-    label: "Users",
-    icon: Users,
-    permission: "users:manage",
-    description: "Manage users and permissions",
   },
 ];

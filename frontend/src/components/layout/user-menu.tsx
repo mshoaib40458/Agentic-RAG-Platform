@@ -18,7 +18,7 @@ export function UserMenu() {
   const { user, logout, authDisabled } = useAuth();
   const navigate = useNavigate();
 
-  if (!user) return null;
+  if (!user || authDisabled) return null;
 
   const handleLogout = () => {
     logout();

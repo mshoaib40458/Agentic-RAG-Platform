@@ -1,5 +1,9 @@
 import os
 import sys
+
+os.environ["GRADIO_SSR_MODE"] = "false"
+os.environ["SETTINGS_IGNORE_DOTENV"] = "1"
+
 import subprocess
 from pathlib import Path
 import gradio as gr

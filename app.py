@@ -1,6 +1,8 @@
 import os
 import sys
 
+# Prevent Gradio from competing with Uvicorn for port 7860
+os.environ["GRADIO_SERVER_PORT"] = "7861"
 os.environ["GRADIO_SSR_MODE"] = "false"
 os.environ["SETTINGS_IGNORE_DOTENV"] = "1"
 

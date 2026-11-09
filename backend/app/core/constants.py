@@ -6,7 +6,17 @@ import from here without cycles.
 
 from __future__ import annotations
 
-from enum import StrEnum
+try:
+    from enum import StrEnum
+except ImportError:
+    from enum import Enum
+
+    class StrEnum(str, Enum):  # type: ignore[no-redef]
+        """Python < 3.11 compatibility fallback."""
+
+        def __str__(self) -> str:
+            return str(self.value)
+
 
 
 class UserRole(StrEnum):

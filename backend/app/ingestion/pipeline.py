@@ -17,13 +17,13 @@ import contextlib
 import hashlib
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import DocumentStatus
+from app.core.constants import UTC, DocumentStatus
 from app.core.exceptions import AppError, IngestionError
 from app.db.models.document import Document, DocumentChunk
 from app.ingestion.chunking import chunk_document

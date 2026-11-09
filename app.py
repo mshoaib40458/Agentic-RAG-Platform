@@ -9,6 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = BASE_DIR / "backend"
 sys.path.insert(0, str(BACKEND_DIR))
 
+# Tell settings to ignore local .env so production secrets always win
+os.environ["SETTINGS_IGNORE_DOTENV"] = "1"
+
 # Change current working directory to backend so relative data paths work seamlessly
 os.chdir(str(BACKEND_DIR))
 

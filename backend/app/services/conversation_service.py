@@ -6,12 +6,12 @@ be resolved against earlier turns (conversational query understanding).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.constants import UserRole
+from app.core.constants import UTC, UserRole
 from app.core.exceptions import NotFoundError
 from app.db.models.conversation import Conversation, ConversationTurn
 from app.db.models.query import Query

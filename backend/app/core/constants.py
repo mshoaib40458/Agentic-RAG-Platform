@@ -17,6 +17,14 @@ except ImportError:
         def __str__(self) -> str:
             return str(self.value)
 
+try:
+    from datetime import UTC
+except ImportError:
+    from datetime import timezone
+
+    UTC = timezone.utc  # type: ignore[assignment]
+
+
 
 
 class UserRole(StrEnum):

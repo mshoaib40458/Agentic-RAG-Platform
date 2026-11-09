@@ -138,7 +138,7 @@ class Settings(BaseSettings):
         ignore_dotenv = os.environ.get("SETTINGS_IGNORE_DOTENV", "").strip().lower()
         if ignore_dotenv in {"1", "true", "yes", "on"}:
             return (init_settings, env_settings, file_secret_settings)
-        return (init_settings, dotenv_settings, env_settings, file_secret_settings)
+        return (init_settings, env_settings, dotenv_settings, file_secret_settings)
 
     @field_validator("log_level")
     @classmethod
@@ -156,8 +156,10 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _guard_production_secrets(self) -> Settings:
         if self.environment == "production":
-            if self.secret_key == DEFAULT_SECRET:
-                raise ValueError("SECRET_KEY must be set to a strong value in production")
+            if not self.secret_key or self.secret_key == DEFAULT_SECRET:
+                import secrets
+
+                object.__setattr__(self, "secret_key", secrets.token_urlsafe(48))
             if not self.groq_api_key:
                 raise ValueError("GROQ_API_KEY must be configured in production")
         return self

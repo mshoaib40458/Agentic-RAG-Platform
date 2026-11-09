@@ -8,7 +8,7 @@ refresh tokens cannot be used as access tokens.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import jwt
@@ -16,6 +16,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
 from app.core.config import get_settings
+from app.core.constants import UTC
 from app.core.exceptions import AuthenticationError
 
 TokenType = Literal["access", "refresh"]

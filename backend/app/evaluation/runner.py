@@ -9,14 +9,14 @@ sync.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.constants import EvaluationStatus
+from app.core.constants import UTC, EvaluationStatus
 from app.core.exceptions import AppError
 from app.db.models.document import Document
 from app.db.models.evaluation import EvaluationRun
